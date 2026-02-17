@@ -7,6 +7,8 @@
 #   gtr rm feature0              # remove the worktree + branch
 #   gtr rm -f feature0           # force-remove even if dirty
 #   gtr cd feature0              # jump into the worktree directory
+#   gtr cd                       # jump back to the main worktree
+#   gtr main                     # jump back to the main worktree
 #   gtr list                     # list all worktrees
 #   gtr claude feature0          # run `claude` inside that worktree
 #   gtr help                     # show usage
@@ -16,7 +18,7 @@
 #   GTR_WORKTREE_DIR   — base directory for worktrees (default: ~/code/worktrees)
 #   GTR_BRANCH_PREFIX  — branch prefix (default: feat/)
 #
-GTR_VERSION="0.1.0"
+GTR_VERSION="1.0.0"
 
 # ------------------------------------------------------------
 
@@ -71,7 +73,8 @@ Commands:
                               Checks out existing branch if it already exists
   rm [-f] <name> [name ...]  Remove worktree(s) and their branches
                               -f / --force  force-remove even with uncommitted changes
-  cd <name>                  Change directory into a worktree
+  cd [name]                  Change directory into a worktree (main worktree if no name)
+  main                       Change directory to the main worktree
   list, ls                   List worktrees in the base directory
   claude <name>              Open claude inside a worktree (creates if needed)
   version                    Show version
@@ -84,6 +87,8 @@ Environment variables:
 Examples:
   gtr create my-feature         # creates worktree + branch feat/my-feature
   gtr cd my-feature             # jump into it
+  gtr cd                        # jump back to main worktree
+  gtr main                      # jump back to main worktree
   gtr rm my-feature             # clean remove
   gtr rm -f my-feature          # force remove (dirty worktree)
   GTR_BRANCH_PREFIX=fix/ gtr create bug42   # branch fix/bug42
@@ -155,9 +160,20 @@ HELP
       ;;
 
     cd)
-      [ -n "$1" ] || { echo "Usage: gtr cd <name>"; return 1; }
-      _gtr_validate_name "$1" || return 1
-      cd "$base/$1" || { echo "No such worktree: $base/$1"; return 1; }
+      if [ -z "$1" ]; then
+        local main_wt
+        main_wt="$(git worktree list --porcelain | sed -n 's/^worktree //p' | head -1)"
+        cd "$main_wt" || { echo "gtr: could not find main worktree" >&2; return 1; }
+      else
+        _gtr_validate_name "$1" || return 1
+        cd "$base/$1" || { echo "No such worktree: $base/$1"; return 1; }
+      fi
+      ;;
+
+    main)
+      local main_wt
+      main_wt="$(git worktree list --porcelain | sed -n 's/^worktree //p' | head -1)"
+      cd "$main_wt" || { echo "gtr: could not find main worktree" >&2; return 1; }
       ;;
 
     list|ls)
@@ -207,7 +223,7 @@ if [ -n "$ZSH_VERSION" ]; then
     local base="${GTR_WORKTREE_DIR:-$HOME/code/worktrees}"
 
     if (( CURRENT == 2 )); then
-      _values 'subcommand' create rm cd list ls claude version help
+      _values 'subcommand' create rm cd main list ls claude version help
     elif (( CURRENT >= 3 )); then
       case "${words[2]}" in
         rm|cd|claude)
@@ -226,7 +242,7 @@ elif [ -n "$BASH_VERSION" ]; then
     local base="${GTR_WORKTREE_DIR:-$HOME/code/worktrees}"
 
     if [ "$COMP_CWORD" -eq 1 ]; then
-      COMPREPLY=($(compgen -W "create rm cd list ls claude version help" -- "$cur"))
+      COMPREPLY=($(compgen -W "create rm cd main list ls claude version help" -- "$cur"))
     elif [ "$COMP_CWORD" -ge 2 ]; then
       case "$prev" in
         rm|cd|claude)
