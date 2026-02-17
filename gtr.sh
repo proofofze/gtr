@@ -20,6 +20,20 @@ GTR_VERSION="0.1.0"
 
 # ------------------------------------------------------------
 
+_gtr_validate_name () {
+  local name="$1"
+  if [ -z "$name" ]; then
+    echo "gtr: name cannot be empty" >&2; return 1
+  fi
+  if [ "${name#-}" != "$name" ]; then
+    echo "gtr: name cannot start with '-': $name" >&2; return 1
+  fi
+  case "$name" in
+    *..* | */* | *\\*)
+      echo "gtr: name cannot contain '..', '/' or '\\': $name" >&2; return 1 ;;
+  esac
+}
+
 _gtr_copy_ignored_dirs () {
   local dest="$1"
   local src
@@ -87,6 +101,7 @@ HELP
     create)
       [ $# -gt 0 ] || { echo "Usage: gtr create <name> [name ...]"; return 1; }
       for name in "$@"; do
+        _gtr_validate_name "$name" || return 1
         local branch="${prefix}${name}"
         if git show-ref --verify --quiet "refs/heads/$branch"; then
           # Branch exists — check it out into the worktree
@@ -114,6 +129,7 @@ HELP
       [ ${#names[@]} -gt 0 ] || { echo "Usage: gtr rm [-f] <name> [name ...]"; return 1; }
 
       for name in "${names[@]}"; do
+        _gtr_validate_name "$name" || return 1
         local wt_path="$base/$name"
         if [ "$force" -eq 1 ]; then
           git worktree remove --force "$wt_path" 2>/dev/null
@@ -140,6 +156,7 @@ HELP
 
     cd)
       [ -n "$1" ] || { echo "Usage: gtr cd <name>"; return 1; }
+      _gtr_validate_name "$1" || return 1
       cd "$base/$1" || { echo "No such worktree: $base/$1"; return 1; }
       ;;
 
@@ -149,6 +166,7 @@ HELP
 
     claude)
       [ -n "$1" ] || { echo "Usage: gtr claude <name>"; return 1; }
+      _gtr_validate_name "$1" || return 1
       local dir="$base/$1"
 
       if [ ! -d "$dir" ]; then
