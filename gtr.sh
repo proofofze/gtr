@@ -2,23 +2,29 @@
 #
 # Examples
 # --------
-#   gtr create feature0          # add worktree (branch feat/feature0)
-#   gtr create feat1 feat2       # add two worktrees at once
-#   gtr rm feature0              # remove the worktree + branch
-#   gtr rm -f feature0           # force-remove even if dirty
-#   gtr cd feature0              # jump into the worktree directory
-#   gtr cd                       # jump back to the main worktree
-#   gtr main                     # jump back to the main worktree
-#   gtr list                     # list all worktrees
-#   gtr claude feature0          # run `claude` inside that worktree
-#   gtr help                     # show usage
+#   gtr create feature0              # add worktree (branch feat/feature0)
+#   gtr create feature0 hotfix/      # add worktree (branch hotfix/feature0)
+#   gtr rm feature0                  # remove the worktree + branch
+#   gtr rm -f feature0               # force-remove even if dirty
+#   gtr cd feature0                  # jump into the worktree directory
+#   gtr cd                           # jump back to the main worktree
+#   gtr main                         # jump back to the main worktree
+#   gtr list                         # list all worktrees (paths, commits, branches)
+#   gtr claude feature0              # run `claude` inside that worktree
+#   gtr config                       # show current base path and source
+#   gtr config /path/to/worktrees    # persist base path to config file
+#   gtr help                         # show usage
 #
-# Configuration (env vars)
-# ------------------------
-#   GTR_WORKTREE_DIR   — base directory for worktrees (default: ~/code/worktrees)
+# Configuration (resolution order)
+# --------------------------------
+#   1. GTR_WORKTREE_DIR env var
+#   2. ~/.config/gtr/config file
+#   3. Auto-detect: <git-root>/../worktrees
+#   4. Fallback: ~/code/worktrees
+#
 #   GTR_BRANCH_PREFIX  — branch prefix (default: feat/)
 #
-GTR_VERSION="1.0.0"
+GTR_VERSION="1.2.0"
 
 # ------------------------------------------------------------
 
@@ -34,6 +40,62 @@ _gtr_validate_name () {
     *..* | */* | *\\*)
       echo "gtr: name cannot contain '..', '/' or '\\': $name" >&2; return 1 ;;
   esac
+}
+
+_gtr_base_path () {
+  # 1. Env var (highest priority)
+  if [ -n "$GTR_WORKTREE_DIR" ]; then
+    echo "$GTR_WORKTREE_DIR"
+    return
+  fi
+  # 2. Config file
+  if [ -f "$HOME/.config/gtr/config" ]; then
+    local cfg
+    cfg="$(cat "$HOME/.config/gtr/config")"
+    if [ -n "$cfg" ]; then
+      echo "$cfg"
+      return
+    fi
+  fi
+  # 3. Auto-detect: <git-root>/../worktrees
+  local git_root
+  git_root="$(git rev-parse --show-toplevel 2>/dev/null)"
+  if [ -n "$git_root" ]; then
+    local auto_dir
+    auto_dir="$(cd "$git_root/.." && pwd)/worktrees"
+    if [ -d "$auto_dir" ]; then
+      echo "$auto_dir"
+      return
+    fi
+  fi
+  # 4. Fallback
+  echo "$HOME/code/worktrees"
+}
+
+_gtr_base_path_source () {
+  if [ -n "$GTR_WORKTREE_DIR" ]; then
+    echo "env GTR_WORKTREE_DIR"
+    return
+  fi
+  if [ -f "$HOME/.config/gtr/config" ]; then
+    local cfg
+    cfg="$(cat "$HOME/.config/gtr/config")"
+    if [ -n "$cfg" ]; then
+      echo "config file (~/.config/gtr/config)"
+      return
+    fi
+  fi
+  local git_root
+  git_root="$(git rev-parse --show-toplevel 2>/dev/null)"
+  if [ -n "$git_root" ]; then
+    local auto_dir
+    auto_dir="$(cd "$git_root/.." && pwd)/worktrees"
+    if [ -d "$auto_dir" ]; then
+      echo "auto-detected (<git-root>/../worktrees)"
+      return
+    fi
+  fi
+  echo "default (~/code/worktrees)"
 }
 
 _gtr_copy_ignored_dirs () {
@@ -52,8 +114,7 @@ _gtr_copy_ignored_dirs () {
 gtr () {
   local cmd="$1"; shift || { gtr help; return 1; }
 
-  # Configurable base folder and branch prefix
-  local base="${GTR_WORKTREE_DIR:-$HOME/code/worktrees}"
+  # Configurable branch prefix
   local prefix="${GTR_BRANCH_PREFIX:-feat/}"
 
   # Help and version don't require a git repo
@@ -66,33 +127,58 @@ gtr () {
     cat <<'HELP'
 gtr ─ Git worktree helper
 
-Usage: gtr <command> [options] [name ...]
+Usage: gtr <command> [options] [args]
 
 Commands:
-  create <name> [name ...]   Create worktree(s) with branch $GTR_BRANCH_PREFIX<name>
-                              Checks out existing branch if it already exists
-  rm [-f] <name> [name ...]  Remove worktree(s) and their branches
-                              -f / --force  force-remove even with uncommitted changes
-  cd [name]                  Change directory into a worktree (main worktree if no name)
-  main                       Change directory to the main worktree
-  list, ls                   List worktrees in the base directory
-  claude <name>              Open claude inside a worktree (creates if needed)
-  version                    Show version
-  help                       Show this help
+  create <name> [prefix]   Create worktree with branch <prefix><name>
+                             Default prefix from $GTR_BRANCH_PREFIX (feat/)
+                             Checks out existing branch if it already exists
+  rm [-f] <name> [name ...] Remove worktree(s) and their branches
+                             -f / --force  force-remove even with uncommitted changes
+  cd [name]                 Change directory into a worktree (main worktree if no name)
+  main                      Change directory to the main worktree
+  list, ls                  List worktrees (paths, commits, branches)
+  claude <name>             Open claude inside a worktree (creates if needed)
+  config [path]             Show or set the worktrees base directory
+  version                   Show version
+  help                      Show this help
+
+Base path resolution (first match wins):
+  1. $GTR_WORKTREE_DIR env var
+  2. ~/.config/gtr/config file
+  3. Auto-detect: <git-root>/../worktrees (if it exists)
+  4. Fallback: ~/code/worktrees
 
 Environment variables:
-  GTR_WORKTREE_DIR    Base directory for worktrees (default: ~/code/worktrees)
+  GTR_WORKTREE_DIR    Override base directory for worktrees
   GTR_BRANCH_PREFIX   Branch prefix for new branches (default: feat/)
 
 Examples:
-  gtr create my-feature         # creates worktree + branch feat/my-feature
-  gtr cd my-feature             # jump into it
-  gtr cd                        # jump back to main worktree
-  gtr main                      # jump back to main worktree
-  gtr rm my-feature             # clean remove
-  gtr rm -f my-feature          # force remove (dirty worktree)
-  GTR_BRANCH_PREFIX=fix/ gtr create bug42   # branch fix/bug42
+  gtr create my-feature              # creates branch feat/my-feature
+  gtr create my-feature hotfix/      # creates branch hotfix/my-feature
+  gtr cd my-feature                  # jump into it
+  gtr cd                             # jump back to main worktree
+  gtr main                           # jump back to main worktree
+  gtr list                           # show all worktrees with details
+  gtr rm my-feature                  # clean remove
+  gtr rm -f my-feature               # force remove (dirty worktree)
+  gtr config                         # show current base path and source
+  gtr config ~/projects/worktrees    # persist base path
 HELP
+    return 0
+  fi
+
+  # Config doesn't require a git repo
+  if [ "$cmd" = "config" ]; then
+    if [ -z "$1" ]; then
+      echo "Base path: $(_gtr_base_path)"
+      echo "Source:    $(_gtr_base_path_source)"
+    else
+      mkdir -p "$HOME/.config/gtr"
+      printf '%s' "$1" > "$HOME/.config/gtr/config"
+      echo "Saved base path: $1"
+      echo "Config file: ~/.config/gtr/config"
+    fi
     return 0
   fi
 
@@ -102,23 +188,27 @@ HELP
     return 1
   fi
 
+  local base
+  base="$(_gtr_base_path)"
+
   case "$cmd" in
     create)
-      [ $# -gt 0 ] || { echo "Usage: gtr create <name> [name ...]"; return 1; }
-      for name in "$@"; do
-        _gtr_validate_name "$name" || return 1
-        local branch="${prefix}${name}"
-        if git show-ref --verify --quiet "refs/heads/$branch"; then
-          # Branch exists — check it out into the worktree
-          git worktree add "$base/$name" "$branch" && _gtr_copy_ignored_dirs "$base/$name"
-        elif git show-ref --verify --quiet "refs/heads/$name"; then
-          # Bare name exists as a branch
-          git worktree add "$base/$name" "$name" && _gtr_copy_ignored_dirs "$base/$name"
-        else
-          # Create new branch
-          git worktree add "$base/$name" -b "$branch" && _gtr_copy_ignored_dirs "$base/$name"
-        fi
-      done
+      [ $# -gt 0 ] || { echo "Usage: gtr create <name> [prefix]"; return 1; }
+      local name="$1"
+      _gtr_validate_name "$name" || return 1
+      # Optional per-call prefix overrides the default
+      local bp="${2:-$prefix}"
+      local branch="${bp}${name}"
+      if git show-ref --verify --quiet "refs/heads/$branch"; then
+        # Branch exists — check it out into the worktree
+        git worktree add "$base/$name" "$branch" && _gtr_copy_ignored_dirs "$base/$name"
+      elif git show-ref --verify --quiet "refs/heads/$name"; then
+        # Bare name exists as a branch
+        git worktree add "$base/$name" "$name" && _gtr_copy_ignored_dirs "$base/$name"
+      else
+        # Create new branch
+        git worktree add "$base/$name" -b "$branch" && _gtr_copy_ignored_dirs "$base/$name"
+      fi
       ;;
 
     rm|remove)
@@ -177,7 +267,9 @@ HELP
       ;;
 
     list|ls)
-      ls -1 "$base" 2>/dev/null || echo "No worktrees in $base"
+      git worktree list 2>/dev/null || echo "No worktrees found"
+      echo ""
+      echo "Base path: $base"
       ;;
 
     claude)
@@ -220,16 +312,27 @@ HELP
 # --- Completion ---
 if [ -n "$ZSH_VERSION" ]; then
   _gtr() {
-    local base="${GTR_WORKTREE_DIR:-$HOME/code/worktrees}"
+    local base
+    base="$(_gtr_base_path)"
 
     if (( CURRENT == 2 )); then
-      _values 'subcommand' create rm cd main list ls claude version help
+      _values 'subcommand' create rm cd main list ls claude config version help
     elif (( CURRENT >= 3 )); then
       case "${words[2]}" in
         rm|cd|claude)
           local -a wts
           wts=("$base"/*(/:t))
           compadd -a wts
+          ;;
+        create)
+          if (( CURRENT == 4 )); then
+            local -a prefixes
+            prefixes=('feat/' 'fix/' 'hotfix/' 'release/')
+            compadd -a prefixes
+          fi
+          ;;
+        config)
+          _path_files -/
           ;;
       esac
     fi
@@ -239,10 +342,11 @@ elif [ -n "$BASH_VERSION" ]; then
   _gtr_bash() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
     local prev="${COMP_WORDS[1]}"
-    local base="${GTR_WORKTREE_DIR:-$HOME/code/worktrees}"
+    local base
+    base="$(_gtr_base_path)"
 
     if [ "$COMP_CWORD" -eq 1 ]; then
-      COMPREPLY=($(compgen -W "create rm cd main list ls claude version help" -- "$cur"))
+      COMPREPLY=($(compgen -W "create rm cd main list ls claude config version help" -- "$cur"))
     elif [ "$COMP_CWORD" -ge 2 ]; then
       case "$prev" in
         rm|cd|claude)
@@ -251,6 +355,14 @@ elif [ -n "$BASH_VERSION" ]; then
             wts=$(ls -1 "$base" 2>/dev/null)
           fi
           COMPREPLY=($(compgen -W "$wts" -- "$cur"))
+          ;;
+        create)
+          if [ "$COMP_CWORD" -eq 3 ]; then
+            COMPREPLY=($(compgen -W "feat/ fix/ hotfix/ release/" -- "$cur"))
+          fi
+          ;;
+        config)
+          COMPREPLY=($(compgen -d -- "$cur"))
           ;;
       esac
     fi
