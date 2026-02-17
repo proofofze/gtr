@@ -6,7 +6,21 @@ A shell function for managing git worktrees and Claude Code sessions with a simp
 
 ## Installation
 
-### 1. Download
+### Quick install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/proofofze/gtr/master/install.sh | bash
+```
+
+This downloads `gtr.sh` to `~/.gtr/`, adds a source line to your `~/.zshrc` or `~/.bashrc`, and sets up tab completion. Restart your shell or run `source ~/.zshrc` to start using it.
+
+To install to a custom directory:
+
+```bash
+GTR_INSTALL_DIR="$HOME/.local/share/gtr" curl -fsSL https://raw.githubusercontent.com/proofofze/gtr/master/install.sh | bash
+```
+
+### Manual install
 
 ```bash
 # Clone the repository
@@ -16,18 +30,10 @@ git clone https://github.com/proofofze/gtr.git
 curl -o gtr.sh https://raw.githubusercontent.com/proofofze/gtr/master/gtr.sh
 ```
 
-### 2. Source it in your shell
-
-Add to your `~/.zshrc` or `~/.bashrc`:
+Then add to your `~/.zshrc` or `~/.bashrc`:
 
 ```bash
 source /path/to/gtr.sh
-```
-
-Reload your shell:
-
-```bash
-source ~/.zshrc  # or source ~/.bashrc
 ```
 
 Tab completion is set up automatically for both zsh and bash.
