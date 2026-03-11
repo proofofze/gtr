@@ -109,6 +109,16 @@ _gtr_copy_ignored_dirs () {
       cp -R "$src/$dir" "$dest/$dir"
     fi
   done
+
+  # Copy gitignored .env files
+  local envfile
+  for envfile in "$src"/.env*; do
+    [ -f "$envfile" ] || continue
+    local basename="${envfile##*/}"
+    if git check-ignore -q "$envfile" 2>/dev/null; then
+      cp "$envfile" "$dest/$basename"
+    fi
+  done
 }
 
 gtr () {

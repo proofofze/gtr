@@ -2,7 +2,7 @@
 
 A shell function for managing git worktrees and Claude Code sessions with a simple, ergonomic interface.
 
-`gtr` wraps `git worktree` to make creating, switching, and cleaning up worktrees fast and painless. It automatically names branches, copies gitignored config directories (`.claude`, `.prompts`) into new worktrees, and lets you launch [Claude Code](https://claude.ai/claude-code) sessions directly inside any worktree.
+`gtr` wraps `git worktree` to make creating, switching, and cleaning up worktrees fast and painless. It automatically names branches, copies gitignored config directories (`.claude`, `.prompts`) and `.env` files into new worktrees, and lets you launch [Claude Code](https://claude.ai/claude-code) sessions directly inside any worktree.
 
 ## Installation
 
@@ -100,6 +100,7 @@ export GTR_BRANCH_PREFIX="wt/"
 - **Automatic branch naming** — `gtr create foo` creates branch `feat/foo` (configurable prefix).
 - **Existing branch detection** — If the branch already exists, it checks it out instead of failing.
 - **Config directory copying** — Copies `.claude` and `.prompts` directories into new worktrees when they are gitignored in the source repo.
+- **Env file copying** — Copies `.env` files (`.env`, `.env.local`, etc.) into new worktrees when they are gitignored in the source repo.
 - **Claude Code integration** — `gtr claude <name>` opens Claude Code directly in the worktree.
 - **Tab completion** — Works out of the box in both zsh and bash.
 
